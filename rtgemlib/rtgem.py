@@ -39,5 +39,13 @@ class RTGEM:
     def size(self):
         return np.array([2 ** len(self.get_node_parents_timescales(nd)) for nd in self.dpd_graph.nodes]).sum()
 
+    def get_edge_timescales_horrizon(self, edge):
+        return self.dpd_graph.edges[edge]['timescales'][-1][-1]
+
     def add_edge(model, edge, timescales):
         pass  # now is your time to shine
+
+    def extend_operator(self, edge):
+        t_h = self.get_edge_timescales_horrizon(edge)
+        self.dpd_graph.edges[edge]['timescales'].append(
+            t_h, 2 * t_h)
