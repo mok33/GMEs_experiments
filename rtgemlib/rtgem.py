@@ -5,9 +5,10 @@ import numpy as np
 
 class RTGEM:
 
-    def __init__(self, model):
+    def __init__(self, model, default_end_timescale=10):
         self.dpd_graph = nx.DiGraph()
         self.set_graph_from_dict(model)
+        self.default_end_timescale = default_end_timescale
 
     def set_graph_from_dict(self, model):
         for node, attrs in model.items():
@@ -42,10 +43,11 @@ class RTGEM:
     def get_edge_timescales_horrizon(self, edge):
         return self.dpd_graph.edges[edge]['timescales'][-1][-1]
 
-    def add_edge(model, edge, timescales):
-        pass  # now is your time to shine
+    def add_edge_operator(self, edge):
+        timescale = [0, self.default_end_timescale]
+        self.dpd_graph.add_edge(*edge, timescales=timescale)
 
     def extend_operator(self, edge):
         t_h = self.get_edge_timescales_horrizon(edge)
         self.dpd_graph.edges[edge]['timescales'].append(
-            t_h, 2 * t_h)
+            [t_h, 2 * t_h])
