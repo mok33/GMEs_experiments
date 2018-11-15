@@ -50,7 +50,7 @@ def get_parents_count_dfs(parents_time_serie, parents_timescales):
     for i, parent_time_serie in enumerate(parents_time_serie):
         activation_windows_df = pd.DataFrame(data=[], index=parent_time_serie,
                                              columns=['t_expr'] + [']{},{}]'.format(tm[1], tm[0]) for tm in parents_timescales[i]])
-        activation_windows_df['t_expr'] = np.inf
+        activation_windows_df.loc[:, 't_expr'] = np.inf
 
         # calcul la configuration du parent dans les instants où ce dernier a eu lieu
         # ET le temps d'expiration de cette configuration.
@@ -58,7 +58,7 @@ def get_parents_count_dfs(parents_time_serie, parents_timescales):
             activation_windows_df, parents_timescales[i])
         activation_windows_df = activation_windows_df.reset_index().rename(columns={
             'index': 't'})
-        activation_windows_df['parent_count'] = activation_windows_df.apply(
+        activation_windows_df.loc[:, 'parent_count'] = activation_windows_df.apply(
             lambda r: tuple([int(single_count) for single_count in r.iloc[2:]]), axis=1)
 
         # fusionne les intervalles de temps consécutifs sur lesquels la
@@ -105,8 +105,9 @@ def getParentsCountVector(parents_c_dfs, timescales_parents, t):
     return sum(pc_expr[:, 0], ()), min(pc_expr[:, 1])
 
 
-def get_node_pcv_from_data(model, all_time_series_df, time_serie, time_col='time', event_col='event'):
-    event = time_serie.name
+def get_node_pcv_from_data(model, all_time_series_df, time_serie, event=None, time_col='time', event_col='event'):
+    if event is None:
+        event = time_serie.name
 
     parents_timeseries = [all_time_series_df.set_index(event_col).loc[parent][time_col].values
                           for parent in model.get_node_parents(event)]
@@ -114,9 +115,10 @@ def get_node_pcv_from_data(model, all_time_series_df, time_serie, time_col='time
 
     pc_df = get_parents_count_dfs(parents_timeseries, parents_timescales)
 
-    time_serie['pcv'] = time_serie[time_col].apply(lambda t: getParentsCountVector(pc_df,
-                                                                                   parents_timescales,
-                                                                                   t)[0])
+    time_serie.loc[:, 'pcv'] = time_serie[time_col].apply(lambda t: getParentsCountVector(pc_df,
+                                                                                          parents_timescales,
+                                                                                          t)[0])
+
     return time_serie.set_index(time_col)['pcv']
 
 
