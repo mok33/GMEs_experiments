@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from .parentCount import set_pcv_from_data, lambdas_from_pcv_serie
+from .parentCount import get_nodes_pcv_from_data, get_node_pcv_from_data, lambdas_from_pcv_serie
 
 
 def get_count_duration_df(data, lambda_col='lambda_t', time_col='time', event_col='event'):
@@ -25,11 +25,10 @@ def compute_logLikelihood(count_duration_df):
 
 
 def LogLikelihood(model, observed_data, time_col='time', event_col='event'):
-    observed_data = observed_data.groupby(event_col).apply(lambda event_time_serie: set_pcv_from_data(model,
-                                                                                                      observed_data,
-                                                                                                      event_time_serie
-                                                                                                      )
-                                                           ).reset_index().sort_values(by=time_col, ascending=True)
+    observed_data.sort_values(by=time_col, inplace=True)
+    observed_data['pcv'] = get_nodes_pcv_from_data(
+        model, observed_data, event_col, time_col).values
+
     observed_data['lambda_t'] = lambdas_from_pcv_serie(model, observed_data)
     lambda_count_duration_df = get_count_duration_df(observed_data)
     return compute_logLikelihood(lambda_count_duration_df)
@@ -61,3 +60,17 @@ def mle_lambdas(model, data, time_col='time', event_col='event'):
         model.set_lambda(row['event'], row['pcv'], row['lambdas'])
 
     return count_and_duration
+
+
+def LocaleLogLikelihood(model, data, count_duration_df, changed_node):
+    # data.set_index('event', inplace=True)
+    # count_duration_df.set_index('event', inplace=True)
+    changed_node_data = data[data['event'] == changed_node].sort_values(
+        by='time', ascending=True)
+
+    changed_node_data.loc['pcv'] = get_node_pcv_from_data(model,
+                                                          data,
+                                                          changed_node_data)
+
+    changed_node_cnt_drt_df = get_count_duration_df(changed_node_data)
+    return compute_logLikelihood(count_duration_df[count_duration_df['event'] != changed_node]) * compute_logLikelihood(changed_node_cnt_drt_df)

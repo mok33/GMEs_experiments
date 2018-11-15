@@ -105,7 +105,7 @@ def getParentsCountVector(parents_c_dfs, timescales_parents, t):
     return sum(pc_expr[:, 0], ()), min(pc_expr[:, 1])
 
 
-def set_pcv_from_data(model, all_time_series_df, time_serie, time_col='time', event_col='event'):
+def get_node_pcv_from_data(model, all_time_series_df, time_serie, time_col='time', event_col='event'):
     event = time_serie.name
 
     parents_timeseries = [all_time_series_df.set_index(event_col).loc[parent][time_col].values
@@ -118,6 +118,13 @@ def set_pcv_from_data(model, all_time_series_df, time_serie, time_col='time', ev
                                                                                    parents_timescales,
                                                                                    t)[0])
     return time_serie.set_index(time_col)['pcv']
+
+
+def get_nodes_pcv_from_data(model, data, event_col='event', time_col='time'):
+    return data.groupby(event_col).apply(lambda event_time_serie: get_node_pcv_from_data(model,
+                                                                                         data,
+                                                                                         event_time_serie)
+                                         ).reset_index().sort_values(by=time_col, ascending=True)['pcv']
 
 
 def lambdas_from_pcv_serie(model, all_time_series_df, event_col='event'):
