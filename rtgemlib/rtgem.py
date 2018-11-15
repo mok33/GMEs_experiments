@@ -51,3 +51,18 @@ class RTGEM:
         t_h = self.get_edge_timescales_horrizon(edge)
         self.dpd_graph.edges[edge]['timescales'].append(
             [t_h, 2 * t_h])
+
+    def split_operator(self, edge, timescale):
+        index = self.dpd_graph.edges[edge]['timescales'].index(timescale)
+
+        del self.dpd_graph.edges[edge]['timescales'][index]
+
+        first_half_timescale = [timescale[0],
+                                (timescale[1] + timescale[0]) / 2]
+        second_half_timescale = [
+            (timescale[1] + timescale[0]) / 2, timescale[1]]
+
+        self.dpd_graph.edges[edge]['timescales'].insert(
+            index, first_half_timescale)
+        self.dpd_graph.edges[edge]['timescales'].insert(
+            index + 1, second_half_timescale)
