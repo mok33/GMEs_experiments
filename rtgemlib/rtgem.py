@@ -1,6 +1,7 @@
 import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 import numpy as np
+import copy
 
 import itertools
 
@@ -46,7 +47,7 @@ class RTGEM:
 
     def copy(self):
         cp = RTGEM({})
-        cp.dpd_graph = self.dpd_graph.copy()
+        cp.dpd_graph = copy.deepcopy(self.dpd_graph)
         return cp
 
     def size(self):
@@ -83,7 +84,72 @@ class RTGEM:
             index + 1, second_half_timescale)
         self.initLambdas(edge[1])
 
-    # PARENT COUNT à finir
+    def add_edge_operator_was_applied(self, edge):
+        timescales = self.dpd_graph.edges[edge]['timescales']
+        return len(timescales) == 1 and timescales[0][0] == 0 and timescales[0][1] == self.default_end_timescale
+
+    def inverse_add_edge_operator(self, edge):
+        is_possible = self.add_edge_operator_was_applied(edge)
+        if is_possible:
+            self.dpd_graph.remove_edge(*edge)
+
+        return is_possible
+
+    def extend_operator_was_applied(self, edge):
+        timescales = self.dpd_graph.edges[edge]['timescales']
+        th, th_2 = timescales[-1]
+        return len(timescales) >= 2 and timescales[-2][-1] == th and timescales[-2][-1] * 2 == th_2
+    # backward operator
+
+    def inverse_extend_operator(self, edge):
+        is_possible = self.extend_operator_was_applied(edge)
+
+        if is_possible:
+            self.dpd_graph.edges[edge]['timescales'].pop()
+            self.initLambdas(edge[1])
+
+        return is_possible
+
+    def split_operator_was_applied(self, tm1, tm2):
+        a, m1 = tm1
+        m2, b = tm2
+
+        return m1 == m2 and m1 == (a + b) / 2
+
+    def inverse_split_operator(self, edge, tm_idx):
+        is_possible = False
+        if tm_idx < len(self.dpd_graph.edges[edge]['timescales']) - 1:
+            tm1, tm2 = self.dpd_graph.edges[edge][
+                'timescales'][tm_idx:tm_idx + 2]
+            is_possible = self.split_operator_was_applied(tm1, tm2)
+
+        if is_possible:
+            a = self.dpd_graph.edges[edge]['timescales'][tm_idx][0]
+            self.dpd_graph.edges[edge]['timescales'][tm_idx + 1][0] = a
+            self.dpd_graph.edges[edge]['timescales'].pop(tm_idx)
+            self.initLambdas(edge[1])
+        return is_possible
+
+    def backward_neighbors_gen(self):
+        edges = self.dpd_graph.edges
+        for edge in edges:
+            nbg_1 = self.copy()
+            if nbg_1.inverse_add_edge_operator(edge):
+                yield 'inverse add_edge {}'.format(edge), nbg_1
+                # self.add_edge_operator(edge)
+
+            nbg_2 = self.copy()
+            if nbg_2.inverse_extend_operator(edge):
+                yield 'inverse_extend {}'.format(edge), nbg_2
+                # self.extend_operator(edge)
+
+            for i_tm, timescale in enumerate(self.dpd_graph.edges[edge]['timescales']):
+                nbg_3 = self.copy()
+                if nbg_3.inverse_split_operator(edge, i_tm):
+                    yield 'inverse split e={}  t={}'.format(edge, timescale), nbg_3
+                    # self.split_operator(edge, timescale)
+
+    # PARENT COUNT pl à finir
     # # def set_node_parent_configuration_change_times(self, node, parent, t):
     # #     node_parent_count_vector = ()
     # #     t_expr = np.inf
