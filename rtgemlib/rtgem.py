@@ -35,6 +35,9 @@ class RTGEM:
     def get_lambda(self, node, pcv):
         return self.dpd_graph.node[node]['lambdas'][pcv]
 
+    def get_lambdas(self, node):
+        return self.dpd_graph.node[node]['lambdas']
+
     def set_lambda(self, node, pcv, lm):
         self.dpd_graph.node[node]['lambdas'][pcv] = lm
 
@@ -60,6 +63,9 @@ class RTGEM:
         self.dpd_graph.add_edge(*edge, timescales=[timescale])
 
         self.initLambdas(edge[1])
+        
+    def remove_edge_operator(self, edge):
+        self.dpd_graph.remove_edge(*edge)
 
     def extend_operator(self, edge):
         t_h = self.get_edge_timescales_horrizon(edge)
