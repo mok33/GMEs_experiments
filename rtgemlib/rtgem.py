@@ -59,10 +59,14 @@ class RTGEM:
         return self.dpd_graph.edges[edge]['timescales'][-1][-1]
 
     def add_edge_operator(self, edge):
+        previous_lambdas = self.get_lambdas(edge[1]) # get lambdas of previous configuration
+        
         timescale = [0, self.default_end_timescale]
         self.dpd_graph.add_edge(*edge, timescales=[timescale])
 
         self.initLambdas(edge[1])
+        
+        return previous_lambdas
         
     def remove_edge_operator(self, edge):
         self.dpd_graph.remove_edge(*edge)
