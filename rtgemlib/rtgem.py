@@ -2,8 +2,8 @@ import networkx as nx
 from networkx.drawing.nx_agraph import to_agraph
 import numpy as np
 import copy
-
 import itertools
+import random
 
 
 class RTGEM:
@@ -60,15 +60,16 @@ class RTGEM:
         return self.dpd_graph.edges[edge]['timescales'][-1][-1]
 
     def add_edge_operator(self, edge):
-        previous_lambdas = self.get_lambdas(edge[1]) # get lambdas of previous configuration
-        
+        # get lambdas of previous configuration
+        previous_lambdas = self.get_lambdas(edge[1])
+
         timescale = [0, self.default_end_timescale]
         self.dpd_graph.add_edge(*edge, timescales=[timescale])
 
         self.initLambdas(edge[1])
-        
+
         return previous_lambdas
-        
+
     def remove_edge_operator(self, edge):
         self.dpd_graph.remove_edge(*edge)
 
@@ -127,6 +128,7 @@ class RTGEM:
         return m1 == m2 and m1 == (a + b) / 2
 
     def inverse_split_operator(self, edge, tm_idx):
+
         is_possible = False
         if tm_idx < len(self.dpd_graph.edges[edge]['timescales']) - 1:
             tm1, tm2 = self.dpd_graph.edges[edge][
@@ -140,7 +142,44 @@ class RTGEM:
             self.initLambdas(edge[1])
         return is_possible
 
+    def apply_operation(self, op, *args):
+        op(*args)
+
+    def random_walk(self, max_depth):
+        """
+        Performs a random walk in the exploration graph, by randomly applying an
+        operator to an edge/timescale.
+        max_depth: the size of
+        """
+
+        edges_to_add = list(
+            (itertools.product(list(self.dpd_graph.nodes), repeat=2)))
+        random.shuffle(edges_to_add)
+
+        if max_depth > 0 and len(self.dpd_graph.edges) == 0:
+            self.add_edge_operator(edges_to_add.pop(0))
+            max_depth -= 1
+
+        while max_depth > 0:
+            op_num = random.randint(1, 3)
+            if op_num == 1:
+                self.add_edge_operator(edges_to_add.pop(0))
+            if op_num == 2:
+                random_edge = random.choice(list(self.dpd_graph.edges))
+                self.extend_operator(random_edge)
+            if op_num == 3:
+                random_edge = random.choice(list(self.dpd_graph.edges))
+                random_tms = random.choice(
+                    list(self.dpd_graph.edges[random_edge]['timescales']))
+
+                self.split_operator(random_edge, random_tms)
+            max_depth -= 1
+
     def backward_neighbors_gen(self):
+        """
+        Generates all graphs that can possibly lead to the current graph, when
+        applying one of the RTGEMs operators.
+        """
         edges = self.dpd_graph.edges
         for edge in edges:
             nbg_1 = self.copy()

@@ -10,13 +10,13 @@ def lambda_duration(time_serie):
 
 def get_count_duration_df(data, lambda_col='lambda_t', time_col='time', event_col='event'):
     lambda_vals = data[lambda_col].unique()
-    lambda_count_duration_df = data.drop_duplicates([event_col, lambda_col])[[event_col,
-                                                                              lambda_col]]
+    lambda_count_duration_df = data.drop_duplicates([event_col, 'pcv'])[[event_col, 'pcv',
+                                                                         lambda_col]]
     data_idx = data.set_index(
-        ['event', 'lambda_t']).sort_index(level=1)
+        ['event', lambda_col]).sort_index(level=1)
 
-    lambda_count_duration_df.loc[:, 'duration'] = lambda_count_duration_df[['event', 'lambda_t']].apply(
-        lambda lm: lambda_duration(data_idx.loc[(lm['event'], lm['lambda_t']), 'time']), axis=1)
+    lambda_count_duration_df.loc[:, 'duration'] = lambda_count_duration_df[['event', lambda_col]].apply(
+        lambda lm: lambda_duration(data_idx.loc[(lm['event'], lm[lambda_col]), 'time']), axis=1)
 
     # lambda_count_duration_df[lambda_col]
     #     .apply(lambda lm: (((data[lambda_col] == lm) * 1.0) *
@@ -58,15 +58,16 @@ def scoreBic(model, observed_data, time_col='time'):
 
 def mle_lambdas(model, data, time_col='time', event_col='event'):
 
-    data = data.groupby(event_col).apply(lambda event_time_serie: set_pcv_from_data(model,
-                                                                                    data,
-                                                                                    event_time_serie)
-                                         ).reset_index().sort_values(by=time_col, ascending=True)
+    data.loc[:, 'pcv'] = get_nodes_pcv_from_data(
+        model, data, event_col, time_col).values
 
-    count_and_duration = get_count_duration_df(data, 'pcv')
+    data.loc[:, 'lambda_t'] = lambdas_from_pcv_serie(
+        model, data)
+
+    count_and_duration = get_count_duration_df(data)
+
     count_and_duration.loc[:, 'lambdas'] = count_and_duration[
         'count'] / count_and_duration['duration']
-
     for _, row in count_and_duration.iterrows():
         model.set_lambda(row['event'], row['pcv'], row['lambdas'])
 
