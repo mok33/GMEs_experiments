@@ -54,21 +54,16 @@ class RTGEM:
         return cp
 
     def size(self):
-        return np.array([2 ** len(self.get_node_parents_timescales(nd)) for nd in self.dpd_graph.nodes]).sum()
+        return np.array([2 ** self.get_node_nb_parents_timescales(nd) for nd in self.dpd_graph.nodes]).sum()
 
     def get_edge_timescales_horrizon(self, edge):
         return self.dpd_graph.edges[edge]['timescales'][-1][-1]
 
     def add_edge_operator(self, edge):
-        # get lambdas of previous configuration
-        previous_lambdas = self.get_lambdas(edge[1])
-
         timescale = [0, self.default_end_timescale]
         self.dpd_graph.add_edge(*edge, timescales=[timescale])
 
         self.initLambdas(edge[1])
-
-        return previous_lambdas
 
     def remove_edge_operator(self, edge):
         self.dpd_graph.remove_edge(*edge)
@@ -142,9 +137,6 @@ class RTGEM:
             self.initLambdas(edge[1])
         return is_possible
 
-    def apply_operation(self, op, *args):
-        op(*args)
-
     def random_walk(self, max_depth):
         """
         Performs a random walk in the exploration graph, by randomly applying an
@@ -174,29 +166,6 @@ class RTGEM:
 
                 self.split_operator(random_edge, random_tms)
             max_depth -= 1
-
-    def backward_neighbors_gen(self):
-        """
-        Generates all graphs that can possibly lead to the current graph, when
-        applying one of the RTGEMs operators.
-        """
-        edges = self.dpd_graph.edges
-        for edge in edges:
-            nbg_1 = self.copy()
-            if nbg_1.inverse_add_edge_operator(edge):
-                yield 'inverse add_edge {}'.format(edge), nbg_1
-                # self.add_edge_operator(edge)
-
-            nbg_2 = self.copy()
-            if nbg_2.inverse_extend_operator(edge):
-                yield 'inverse_extend {}'.format(edge), nbg_2
-                # self.extend_operator(edge)
-
-            for i_tm, timescale in enumerate(self.dpd_graph.edges[edge]['timescales']):
-                nbg_3 = self.copy()
-                if nbg_3.inverse_split_operator(edge, i_tm):
-                    yield 'inverse split e={}  t={}'.format(edge, timescale), nbg_3
-                    # self.split_operator(edge, timescale)
 
     # PARENT COUNT pl à finir
     # # def set_node_parent_configuration_change_times(self, node, parent, t):
