@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import copy
+from tqdm import tqdm
 
 from .parentCount import get_nodes_pcv_from_data, get_node_pcv_from_data, lambdas_from_pcv_serie
 
@@ -19,8 +20,8 @@ def get_count_duration_df(data, lambda_col='lambda_t', time_col='time', event_co
     lambda_count_duration_df.loc[:, 'duration'] = lambda_count_duration_df[['event', lambda_col]].apply(
         lambda lm: lambda_duration(data_idx.loc[(lm['event'], lm[lambda_col]), 'time']), axis=1)
 
-    lambda_count_duration_df.loc[:, 'count'] = lambda_count_duration_df[
-        lambda_col].apply(lambda lm: (data[lambda_col] == lm).sum())
+    lambda_count_duration_df.loc[:, 'count'] = lambda_count_duration_df[['event', lambda_col]].apply(
+        lambda lm: data_idx.loc[(lm['event'], lm[lambda_col])].shape[0], axis=1)
 
     return lambda_count_duration_df
 
@@ -146,3 +147,52 @@ def backward_neighbors_gen(rtgem, data, cnt_drt_df, LogL, size_log_td, log_td):
                 size_log_td_ngbr = (size_log_td - (node_size / 2) * log_td)
 
                 yield rtgem.inverse_split_operator, [edge, i_tm], logL_ngr, size_log_td_ngbr, cnt_drt_df
+
+
+def backwardSearch(model, data):
+    set_pcv_lambda_t(model, data)
+    lambdas_count_duration_df = get_count_duration_df(data)
+
+    LogL = compute_logLikelihood(lambdas_count_duration_df)
+    log_td = np.log(data.iloc[-1]['time'] - data.iloc[0]['time'])
+
+    size_log_td = model.size() * log_td
+
+    score = LogL - size_log_td
+    local_maximum = False
+
+    it = 0
+    while not local_maximum:
+        #     max_ngbr_score = -np.inf
+        local_maximum = True
+        print('iteration number: {}: scoreBIC = {}'.format(it, score))
+
+        for ngbr_info in tqdm(backward_neighbors_gen(model, data, lambdas_count_duration_df,
+                                                     LogL, size_log_td, log_td)):
+
+            inverse_op, args, LogL_ngbr, size_log_td_ngbr, changed_node_cnt_drt_df = ngbr_info
+            score_ngbr = LogL_ngbr - size_log_td_ngbr
+
+            if score_ngbr > score:
+                print('max ngbr {}, args={} '.format(inverse_op, args))
+                inverse_op(*args)
+                LogL = LogL_ngbr
+                size_log_td = size_log_td_ngbr
+                changed_node = changed_node_cnt_drt_df.iloc[0]['event']
+                lambdas_count_duration_df = lambdas_count_duration_df[
+                    lambdas_count_duration_df['event'] != changed_node]
+                lambdas_count_duration_df = pd.concat(
+                    [lambdas_count_duration_df, changed_node_cnt_drt_df])
+
+                local_maximum = False
+                score = LogL - size_log_td
+
+                break
+        it += 1
+    # initialisation des lambdas, et opti
+    for nd in model.dpd_graph.nodes:
+        model.initLambdas(nd)
+
+    mle_lambdas(model, data)
+
+    return model, score

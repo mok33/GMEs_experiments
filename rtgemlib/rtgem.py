@@ -4,6 +4,7 @@ import numpy as np
 import copy
 import itertools
 import random
+from tqdm import tqdm
 
 
 class RTGEM:
@@ -137,7 +138,7 @@ class RTGEM:
             self.initLambdas(edge[1])
         return is_possible
 
-    def random_walk(self, max_depth):
+    def random_walk(self, max_depth, t_n=30):
         """
         Performs a random walk in the exploration graph, by randomly applying an
         operator to an edge/timescale.
@@ -146,26 +147,46 @@ class RTGEM:
 
         edges_to_add = list(
             (itertools.product(list(self.dpd_graph.nodes), repeat=2)))
+        edges_to_extend = []
+
         random.shuffle(edges_to_add)
 
         if max_depth > 0 and len(self.dpd_graph.edges) == 0:
-            self.add_edge_operator(edges_to_add.pop(0))
+            e = edges_to_add.pop(0)
+            self.add_edge_operator(e)
+            edges_to_extend.append(e)
+
             max_depth -= 1
 
-        while max_depth > 0:
-            op_num = random.randint(1, 3)
+        valid_operations = [1, 2, 3]
+
+        for i in tqdm(range(max_depth)):
+            op_num = random.choice(valid_operations)
             if op_num == 1:
-                self.add_edge_operator(edges_to_add.pop(0))
+                e = edges_to_add.pop(0)
+                self.add_edge_operator(e)
+                edges_to_extend.append(e)
+
+                if len(edges_to_add) == 0:
+                    valid_operations.remove(1)
+
             if op_num == 2:
-                random_edge = random.choice(list(self.dpd_graph.edges))
-                self.extend_operator(random_edge)
+                random_edge_num = random.randint(0, len(edges_to_extend) - 1)
+                random_edge = edges_to_extend[random_edge_num]
+                if 2 * self.get_edge_timescales_horrizon(random_edge) > t_n:
+                    edges_to_extend.pop(random_edge_num)
+                else:
+                    self.extend_operator(random_edge)
+
+                if len(edges_to_extend) == 0:
+                    valid_operations.remove(2)
+
             if op_num == 3:
                 random_edge = random.choice(list(self.dpd_graph.edges))
                 random_tms = random.choice(
                     list(self.dpd_graph.edges[random_edge]['timescales']))
 
                 self.split_operator(random_edge, random_tms)
-            max_depth -= 1
 
     # PARENT COUNT pl à finir
     # # def set_node_parent_configuration_change_times(self, node, parent, t):
