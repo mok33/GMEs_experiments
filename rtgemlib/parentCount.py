@@ -17,7 +17,7 @@ def count_timescale(df, timescales_parent):
         for tm_num, (a, b) in enumerate(timescales_parent):
             # la colonne indiquant si le parent a eu lieu dans la timscale
             # timescales_parent[tm_num]
-            tm_col = df.columns[tm_num + 1]
+            tm_col = df.columns[tm_num]
             # df est indexé par les timestamps auxquels la parent a eu lieu,
             # les timestamps <= t (t est le iéme index) sont séléctionnée,
             # les timestampes sont "mappée" à un tableau de booléen qui indique pour chacun si il appartient ou non au timescale,
@@ -32,10 +32,41 @@ def count_timescale(df, timescales_parent):
                 # réalisatio)
                 duration = (b - a)
                 # le temps d'expiration
-                df.loc[t, 't_expr'] = min(t + duration, df.loc[t, 't_expr'])
+                df.loc[t, 't_expr'] = min(
+                    t + duration, df.loc[t, 't_expr'])
                 df.loc[(df.index.values > t) & (
                     df.index < t + duration), tm_col] = 1
     return df
+
+
+def init_parent_count_df(timeserie, timescales,):
+    return pd.DataFrame(data=[], index=timeserie,
+                        columns=['[{},{}['.format(tm[0], tm[1]) for tm in timescales] + ['expr([{},{}[)'.format(tm[0], tm[1]) for tm in timescales] + ['t_expr'])
+
+
+def updates_parent_count_df(parent_count_df, tms,
+                            t_n_pa):
+
+    t_pa = np.append(parent_count_df.values, t_n_pa)
+
+    for tm_num, (a, b) in enumerate(tms):
+        tm_col = parent_count_df.columns[tm_num]
+        t_expr_tms = t_n_pa + (b - a)
+        tm_expr_col = 'expr({})'.format(tm_col)
+
+        if parent_count_df.shape[0] == 0:
+            parent_count_df.loc[t_n_pa, tm_col] = (
+                ((t_pa > t_n_pa - b) & (t_pa <= t_n_pa - a)).sum() >= 1) * 1
+        else:
+            parent_count_df.loc[
+                t_n_pa, tm_col] = (t_n_pa < parent_count_df.iloc[-1][tm_expr_col]) * 1
+
+        if parent_count_df.loc[t_n_pa, tm_col]:
+            parent_count_df.loc[t_n_pa, tm_expr_col] = t_expr_tms
+
+    parent_count_df.loc[t_n_pa, 't_expr'] = parent_count_df.loc[
+        t_n_pa, parent_count_df.columns[len(tms):-1]].min()
+    return parent_count_df
 
 
 def get_parents_count_dfs(parents_time_serie, parents_timescales):
@@ -49,7 +80,7 @@ def get_parents_count_dfs(parents_time_serie, parents_timescales):
     parents_count_dfs = []
     for i, parent_time_serie in enumerate(parents_time_serie):
         activation_windows_df = pd.DataFrame(data=[], index=parent_time_serie,
-                                             columns=['t_expr'] + [']{},{}]'.format(tm[1], tm[0]) for tm in parents_timescales[i]])
+                                             columns=[']{},{}]'.format(tm[1], tm[0]) for tm in parents_timescales[i]] + ['t_expr'])
         activation_windows_df.loc[:, 't_expr'] = np.inf
 
         # calcul la configuration du parent dans les instants où ce dernier a eu lieu

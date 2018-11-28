@@ -4,7 +4,7 @@ import numpy as np
 import copy
 import itertools
 import random
-from tqdm import tqdm
+from tqdm.autonotebook import tqdm
 
 
 class RTGEM:
@@ -150,15 +150,15 @@ class RTGEM:
         edges_to_extend = []
 
         random.shuffle(edges_to_add)
+        valid_operations = [1, 2, 3]
 
-        if max_depth > 0 and len(self.dpd_graph.edges) == 0:
+        if max_depth > 0:
             e = edges_to_add.pop(0)
             self.add_edge_operator(e)
             edges_to_extend.append(e)
-
+            if len(edges_to_add) == 0:
+                valid_operations.remove(1)
             max_depth -= 1
-
-        valid_operations = [1, 2, 3]
 
         for i in tqdm(range(max_depth)):
             op_num = random.choice(valid_operations)
