@@ -24,7 +24,7 @@ def get_parent_count_vector(parent_count, t, t_max):
     for par_act_expr in parent_count:
         if par_act_expr.shape[0] > 0:
 
-            res = par_act_expr[(t >= par_act_expr[:, 0]) &
+            res = par_act_expr[(t > par_act_expr[:, 0]) &
                                (t < par_act_expr[:, 1])]
             if res.shape[0] > 0:
                 cv += (1,)
