@@ -2,28 +2,61 @@ import pandas as pd
 import numpy as np
 import copy
 from tqdm import tqdm
+import scipy as sc
 
-from .parentCount import get_nodes_pcv_from_data, get_node_pcv_from_data, lambdas_from_pcv_serie
-
-
-def lambda_duration(time_serie):
-    return (time_serie - time_serie.shift().fillna(0)).sum()
+from .parentCount import get_parents_count_vector
+from .sampling import set_nodes_parents_counts
 
 
-def get_count_duration_df(data, lambda_col='lambda_t', time_col='time', event_col='event'):
-    lambda_vals = data[lambda_col].unique()
-    lambda_count_duration_df = data.drop_duplicates([event_col, 'pcv'])[[event_col, 'pcv',
-                                                                         lambda_col]]
-    data_idx = data.set_index(
-        ['event', lambda_col]).sort_index(level=1)
+def duration(params_df, model, t_max, node=None):
+    params_df.loc[:, 'duration'] = 0
+    params_df.set_index(['event', 'pcv'], inplace=True)
+    nodes = model.dpd_graph.nodes
+    if node is not None:
+        nodes = [node]
 
-    lambda_count_duration_df.loc[:, 'duration'] = lambda_count_duration_df[['event', lambda_col]].apply(
-        lambda lm: lambda_duration(data_idx.loc[(lm['event'], lm[lambda_col]), 'time']), axis=1)
+    for n in nodes:
+        t_ = 0
 
-    lambda_count_duration_df.loc[:, 'count'] = lambda_count_duration_df[['event', lambda_col]].apply(
-        lambda lm: data_idx.loc[(lm['event'], lm[lambda_col])].shape[0], axis=1)
+        while t_ < t_max:
 
-    return lambda_count_duration_df
+            pcv, exp_t = get_parents_count_vector(
+                model.get_parents_count(n), t_, t_max)
+
+            params_df['duration'].loc[(n, pcv)] += min(exp_t, t_max) - t_
+            t_ = exp_t
+
+    # l_drt = 0
+    # t_i_pred = 0
+    # i = 0
+    # while i < len(ts):
+
+    #     t_i = ts[i]
+    #     l_drt += sc.integrate.quad(lambda t_: (get_parent_configuration(node=l, tgems=model, t=t_)[0] == j) * 1.0,
+    #                                t_i_pred, t_i)[0]
+    #     t_i_pred = t_i
+    #     i += 1
+    params_df.reset_index(inplace=True)
+
+
+def get_count_duration_df(data, model, t_max, node=None):
+    nodes = model.dpd_graph.nodes
+    if node is not None:
+        nodes = [node]
+
+    params_df = pd.DataFrame([(node, pcv, lm) for node in nodes
+                              for pcv, lm in model.dpd_graph.nodes[node]['lambdas'].items()], columns=['event', 'pcv', 'lambda_t'])
+
+    lambda_counts = data.groupby(['event', 'pcv'])['time'].size()
+
+    ts = np.append(data['time'].values, t_max)
+    # params_df.loc[:, 'duration'] = params_df[['event', 'pcv']].apply(
+    #     lambda row: duration(ts, model, row['event'], row['pcv']), axis=1)
+    duration(params_df, model, t_max, node)
+    params_df.loc[:, 'count'] = params_df[['event', 'pcv']].apply(
+        lambda row: lambda_counts.get(tuple(row), 0), axis=1)
+
+    return params_df
 
 
 def compute_logLikelihood(count_duration_df):
@@ -33,65 +66,76 @@ def compute_logLikelihood(count_duration_df):
     return log_likelihood
 
 
-def set_pcv_lambda_t(model, data, event_col='event', time_col='time'):
-    data.loc[:, 'pcv'] = get_nodes_pcv_from_data(
-        model, data, event_col, time_col).values
+def set_pcv_lambda_t(model, data, t_max, event_col='event', time_col='time'):
+    data['pcv'] = data[['event', 'time']].apply(lambda row: get_parents_count_vector(
+        model.get_parents_count(row['event']), row['time'], t_max)[0], axis=1)
 
-    data.loc[:, 'lambda_t'] = lambdas_from_pcv_serie(
-        model, data)
+    data.loc[:, 'lambda_t'] = data[['event', 'pcv']].apply(
+        lambda row: model.get_lambda(node=row['event'], pcv=row['pcv']), axis=1)
 
 
-def LogLikelihood(model, observed_data, time_col='time', event_col='event'):
-    set_pcv_lambda_t(model, observed_data)
-    lambda_count_duration_df = get_count_duration_df(observed_data)
+def set_nodes_timeseries(model, data):
+    data.groupby('event')['time'].apply(
+        lambda ts: model.set_node_timeserie(ts.name, ts.values))
+
+    return model
+
+
+def LogLikelihood(model, observed_data, time_col='time', event_col='event', t_max=100):
+    model = set_nodes_timeseries(model, observed_data)
+    model = set_nodes_parents_counts(model, model.dpd_graph.nodes)
+
+    set_pcv_lambda_t(model, observed_data, t_max)
+    lambda_count_duration_df = get_count_duration_df(
+        observed_data, model, t_max)
+
     return compute_logLikelihood(lambda_count_duration_df)
 
 
-def scoreBic(model, observed_data, time_col='time'):
-    likelihood = LogLikelihood(model, observed_data)
+def scoreBic(model, observed_data, time_col='time', t_max=100):
+    likelihood = LogLikelihood(model, observed_data, t_max)
 
-    temps = observed_data[time_col]
-    duree = temps.max() - temps.min()
-
-    bic_score = likelihood - model.size() * np.log(duree)
+    bic_score = likelihood - model.size() * np.log(t_max)
 
     return bic_score
 
 
-def mle_lambdas(model, data, time_col='time', event_col='event'):
+def mle_lambdas(model, data, time_col='time', event_col='event', t_max=10):
 
-    set_pcv_lambda_t(model, data)
-    count_and_duration = get_count_duration_df(data)
+    set_pcv_lambda_t(model, data, t_max)
+    count_and_duration = get_count_duration_df(data, model, t_max)
 
     count_and_duration.loc[:, 'lambda_t'] = count_and_duration[
-        'count'] / count_and_duration['duration']
+        'count'] / (count_and_duration['duration'])
 
     for _, row in count_and_duration.iterrows():
         model.set_lambda(row['event'], row['pcv'], row['lambda_t'])
 
-    return count_and_duration
+    return count_and_duration.fillna(0)
 
 
 def get_node_LogLikelihood(model, cnt_drt_df, node):
     return compute_logLikelihood(cnt_drt_df[cnt_drt_df['event'] == node])
 
 
-def LocaleLogLikelihood(model, data, baseLogL, nodeLogL, changed_node, optimize_lambdas=False):
+def LocaleLogLikelihood(model, data, t_max, baseLogL, nodeLogL, changed_node, optimize_lambdas=False):
     # data.set_index('event', inplace=True)
     # count_duration_df.set_index('event', inplace=True)
     changed_node_data = data[data['event'] == changed_node]
-
-    changed_node_data.loc[:, 'pcv'] = get_node_pcv_from_data(model,
-                                                             data,
-                                                             changed_node_data,
-                                                             event=changed_node).values
+    model = set_nodes_parents_counts(model, changed_node)
+    set_pcv_lambda_t(model, changed_node_data, t_max)
+    data.loc[data['event'] == changed_node, :] = changed_node_data
 
     changed_node_cnt_drt_df = get_count_duration_df(
-        changed_node_data).reset_index(drop=True)
+        changed_node_data, model, t_max, changed_node).reset_index(drop=True)
 
     if optimize_lambdas:
-        changed_node_cnt_drt_df.loc[:, 'lambda_t'] = changed_node_cnt_drt_df[
-            'count'] / changed_node_cnt_drt_df['duration']
+        changed_node_cnt_drt_df.loc[:, 'lambda_t'] = (changed_node_cnt_drt_df[
+            'count'] / changed_node_cnt_drt_df['duration']).fillna(1e-4)
+        # changed_node_cnt_drt_df.loc[
+        #     :, 'lambda_t'] = changed_node_cnt_drt_df.loc[:, 'lambda_t'] / changed_node_cnt_drt_df.loc[:, 'lambda_t'].sum()
+        # # changed_node_cnt_drt_df['lambda_t'] = changed_node_cnt_drt_df[
+        # #     'lambda_t']
 
     return baseLogL - nodeLogL + compute_logLikelihood(changed_node_cnt_drt_df), changed_node_cnt_drt_df
 
@@ -149,9 +193,13 @@ def backward_neighbors_gen(rtgem, data, cnt_drt_df, LogL, size_log_td, log_td):
                 yield rtgem.inverse_split_operator, [edge, i_tm], logL_ngr, size_log_td_ngbr, cnt_drt_df
 
 
-def backwardSearch(model, data):
-    set_pcv_lambda_t(model, data)
-    lambdas_count_duration_df = get_count_duration_df(data)
+def backwardSearch(model, data, t_max=100):
+    model = set_nodes_timeseries(model, observed_data)
+    model = set_nodes_parents_counts(model, model.dpd_graph.nodes)
+
+    set_pcv_lambda_t(model, data, t_max)
+
+    lambdas_count_duration_df = get_count_duration_df(data, model, t_max)
 
     LogL = compute_logLikelihood(lambdas_count_duration_df)
     log_td = np.log(data.iloc[-1]['time'] - data.iloc[0]['time'])

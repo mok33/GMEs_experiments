@@ -31,6 +31,9 @@ class RTGEM:
     def get_node_parents_timeseries(self, node):
         return [self.dpd_graph.node[pa]['timeserie'] for pa in self.dpd_graph.predecessors(node)]
 
+    def get_parents_count(self, node):
+        return [self.dpd_graph.get_edge_data(pa, node)['parent_count'] for pa in self.dpd_graph.predecessors(node)]
+
     def get_node_parents(self, node):
         return list(self.dpd_graph.predecessors(node))
 
@@ -40,14 +43,21 @@ class RTGEM:
     def get_lambdas(self, node):
         return self.dpd_graph.node[node]['lambdas']
 
+    def set_node_timeserie(self, node, ts):
+        self.dpd_graph.node[node]['timeserie'] = ts
+
     def set_lambda(self, node, pcv, lm):
         self.dpd_graph.node[node]['lambdas'][pcv] = lm
 
-    def initLambdas(self, node):
+    def initLambdas(self, node, random=True, a=0, b=10):
         nb_parent = self.get_node_nb_parents_timescales(node)
+        if random:
+            self.dpd_graph.node[node]['lambdas'] = dict(zip(list(itertools.product(
+                *[[0, 1]] * nb_parent)), np.random.uniform(a, b, np.power(2, nb_parent))))
 
-        self.dpd_graph.node[node]['lambdas'] = dict(zip(list(itertools.product(
-            *[[0, 1]] * nb_parent)), [self.default_lambda] * np.power(2, nb_parent)))
+        else:
+            self.dpd_graph.node[node]['lambdas'] = dict(zip(list(itertools.product(
+                *[[0, 1]] * nb_parent)), [self.default_lambda] * np.power(2, nb_parent)))
 
     def copy(self):
         cp = RTGEM({})
@@ -99,6 +109,7 @@ class RTGEM:
         is_possible = self.add_edge_operator_was_applied(edge)
         if is_possible:
             self.dpd_graph.remove_edge(*edge)
+            self.initLambdas(edge[1])
 
         return is_possible
 
@@ -160,7 +171,7 @@ class RTGEM:
                 valid_operations.remove(1)
             max_depth -= 1
 
-        for i in tqdm(range(max_depth)):
+        for i in tqdm(range(max_depth), leave=False):
             op_num = random.choice(valid_operations)
             if op_num == 1:
                 e = edges_to_add.pop(0)
