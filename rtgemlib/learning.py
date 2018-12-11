@@ -61,6 +61,7 @@ def get_count_duration_df(data, model, t_max, node=None):
 
 def compute_logLikelihood(count_duration_df):
     count_duration_df['lambda_t'] = count_duration_df['lambda_t'].replace(0, 1)
+    
     log_likelihood = ((np.log(count_duration_df['lambda_t']) * count_duration_df['count']) +
                       (-count_duration_df['lambda_t'] * count_duration_df['duration'])).sum()
 
