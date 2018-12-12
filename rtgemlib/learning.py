@@ -26,16 +26,6 @@ def duration(params_df, model, t_max, node=None):
             params_df['duration'].loc[(n, pcv)] += min(exp_t, t_max) - t_
             t_ = exp_t
 
-    # l_drt = 0
-    # t_i_pred = 0
-    # i = 0
-    # while i < len(ts):
-
-    #     t_i = ts[i]
-    #     l_drt += sc.integrate.quad(lambda t_: (get_parent_configuration(node=l, tgems=model, t=t_)[0] == j) * 1.0,
-    #                                t_i_pred, t_i)[0]
-    #     t_i_pred = t_i
-    #     i += 1
     params_df.reset_index(inplace=True)
 
 
@@ -60,8 +50,7 @@ def get_count_duration_df(data, model, t_max, node=None):
 
 
 def compute_logLikelihood(count_duration_df):
-    count_duration_df['lambda_t'] = count_duration_df['lambda_t'].replace(0, 1)
-    log_likelihood = ((np.log(count_duration_df['lambda_t']) * count_duration_df['count']) +
+    log_likelihood = ((np.log(count_duration_df['lambda_t'].replace(0, 1)) * count_duration_df['count']) +
                       (-count_duration_df['lambda_t'] * count_duration_df['duration'])).sum()
 
     return log_likelihood
@@ -82,11 +71,16 @@ def set_nodes_timeseries(model, data):
     return model
 
 
-def LogLikelihood(model, observed_data, t_max, time_col='time', event_col='event'):
+def initModelFromData(model, observed_data, t_max):
+
     model = set_nodes_timeseries(model, observed_data)
     model = set_nodes_parents_counts(model, model.dpd_graph.nodes, t_max)
 
     set_pcv_lambda_t(model, observed_data, t_max)
+    return model
+
+
+def LogLikelihood(model, observed_data, t_max, time_col='time', event_col='event'):
     lambda_count_duration_df = get_count_duration_df(
         observed_data, model, t_max)
     return compute_logLikelihood(lambda_count_duration_df)
@@ -94,26 +88,26 @@ def LogLikelihood(model, observed_data, t_max, time_col='time', event_col='event
 
 def scoreBic(model, observed_data, t_max, time_col='time'):
     likelihood = LogLikelihood(model, observed_data, t_max)
-    bic_score = likelihood - model.size() * np.log(t_max)
+    bic_score = likelihood - (model.size() * np.log(t_max))
 
     return bic_score
 
 
-def mle_lambdas(model, data, t_max, time_col='time', event_col='event'):
-
-    set_pcv_lambda_t(model, data, t_max)
-    count_and_duration = get_count_duration_df(data, model, t_max)
+def mle_lambdas(model, count_and_duration):
 
     count_and_duration.loc[:, 'lambda_t'] = count_and_duration[
         'count'] / (count_and_duration['duration'])
 
-    for _, row in count_and_duration.iterrows():
-        model.set_lambda(row['event'], row['pcv'], row['lambda_t'])
+    events_lambdas = count_and_duration.groupby('event').apply(
+        lambda df: df.set_index('pcv')['lambda_t'].to_dict()).to_dict()
 
-    return count_and_duration.fillna(0)
+    for node in model.dpd_graph.nodes:
+        model.dpd_graph.nodes[node]['lambdas'] = events_lambdas[node]
+
+    return count_and_duration
 
 
-def get_node_LogLikelihood(model, cnt_drt_df, node):
+def get_node_LogLikelihood(cnt_drt_df, node):
     return compute_logLikelihood(cnt_drt_df[cnt_drt_df['event'] == node])
 
 
@@ -136,7 +130,8 @@ def LocaleLogLikelihood(model, data, t_max, baseLogL, nodeLogL, changed_node, op
         #     :, 'lambda_t'] = changed_node_cnt_drt_df.loc[:, 'lambda_t'] / changed_node_cnt_drt_df.loc[:, 'lambda_t'].sum()
         # # changed_node_cnt_drt_df['lambda_t'] = changed_node_cnt_drt_df[
         # #     'lambda_t']
-    return baseLogL - nodeLogL + compute_logLikelihood(changed_node_cnt_drt_df), changed_node_cnt_drt_df
+
+    return (baseLogL - nodeLogL) + compute_logLikelihood(changed_node_cnt_drt_df), changed_node_cnt_drt_df
 
     # GRAPH OPTIMIZATION
 
@@ -155,33 +150,33 @@ def backward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, lo
     """
     edges = copy.deepcopy(rtgem.dpd_graph.edges)
     for edge in edges:
-        node_LogL = get_node_LogLikelihood(rtgem, cnt_drt_df, edge[1])
+        node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
         node_size = np.power(2, rtgem.get_node_nb_parents_timescales(edge[1]))
 
         old_lambdas = copy.deepcopy(rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
 
         if rtgem.inverse_add_edge_operator(edge):
 
-            logL_ngr, cnt_drt_df = LocaleLogLikelihood(
+            logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
                 rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
             rtgem.add_edge_operator(edge)
             rtgem.dpd_graph.nodes[edge[1]]['lambdas'] = old_lambdas
 
             size_log_td_ngbr = (size_log_td - (node_size / 2) * log_td)
-            yield rtgem.inverse_add_edge_operator, [edge], logL_ngr, size_log_td_ngbr, cnt_drt_df
+            yield rtgem.inverse_add_edge_operator, [edge], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
         if rtgem.inverse_extend_operator(edge):
-            logL_ngr, cnt_drt_df = LocaleLogLikelihood(
+            logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
                 rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
             rtgem.extend_operator(edge)
             rtgem.dpd_graph.nodes[edge[1]]['lambdas'] = old_lambdas
 
             size_log_td_ngbr = (size_log_td - (node_size / 2) * log_td)
-            yield rtgem.inverse_extend_operator, [edge], logL_ngr, size_log_td_ngbr, cnt_drt_df
+            yield rtgem.inverse_extend_operator, [edge], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
         for i_tm, timescale in enumerate(rtgem.dpd_graph.edges[edge]['timescales']):
             if rtgem.inverse_split_operator(edge, i_tm):
-                logL_ngr, cnt_drt_df = LocaleLogLikelihood(
+                logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
                     rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
                 rtgem.split_operator(edge, rtgem.dpd_graph.edges[
                                      edge]['timescales'][i_tm])
@@ -189,7 +184,7 @@ def backward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, lo
 
                 size_log_td_ngbr = (size_log_td - (node_size / 2) * log_td)
 
-                yield rtgem.inverse_split_operator, [edge, i_tm], logL_ngr, size_log_td_ngbr, cnt_drt_df
+                yield rtgem.inverse_split_operator, [edge, i_tm], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
 
 def forward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log_td, possible_edges):
@@ -197,7 +192,7 @@ def forward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log
 
     for edge in edges:
         if rtgem.get_edge_timescales_horrizon(edge) < t_max:
-            node_LogL = get_node_LogLikelihood(rtgem, cnt_drt_df, edge[1])
+            node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
             node_size = np.power(
                 2, rtgem.get_node_nb_parents_timescales(edge[1]))
 
@@ -205,7 +200,7 @@ def forward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log
                 rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
 
             rtgem.extend_operator(edge)
-            logL_ngr, cnt_drt_df = LocaleLogLikelihood(
+            logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
                 rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
 
             rtgem.inverse_extend_operator(edge)
@@ -213,17 +208,17 @@ def forward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log
 
             size_log_td_ngbr = (
                 (size_log_td - node_size * log_td) + (node_size * 2) * log_td)
-            yield rtgem.extend_operator, [edge], logL_ngr, size_log_td_ngbr, cnt_drt_df
+            yield rtgem.extend_operator, [edge], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
         for i_tm, timescale in enumerate(rtgem.dpd_graph.edges[edge]['timescales']):
-            node_LogL = get_node_LogLikelihood(rtgem, cnt_drt_df, edge[1])
+            node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
             node_size = np.power(
                 2, rtgem.get_node_nb_parents_timescales(edge[1]))
 
             old_lambdas = copy.deepcopy(
                 rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
             rtgem.split_operator(edge, timescale)
-            logL_ngr, cnt_drt_df = LocaleLogLikelihood(
+            logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
                 rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
 
             rtgem.inverse_split_operator(edge, i_tm)
@@ -232,16 +227,16 @@ def forward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log
             size_log_td_ngbr = (
                 (size_log_td - node_size * log_td) + (node_size * 2) * log_td)
 
-            yield rtgem.split_operator, [edge, timescale], logL_ngr, size_log_td_ngbr, cnt_drt_df
+            yield rtgem.split_operator, [edge, timescale], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
     for edge in possible_edges:
-        node_LogL = get_node_LogLikelihood(rtgem, cnt_drt_df, edge[1])
+        node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
         node_size = np.power(2, rtgem.get_node_nb_parents_timescales(edge[1]))
 
         old_lambdas = copy.deepcopy(rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
 
         rtgem.add_edge_operator(edge)
-        logL_ngr, cnt_drt_df = LocaleLogLikelihood(
+        logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
             rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
 
         rtgem.inverse_add_edge_operator(edge)
@@ -250,7 +245,7 @@ def forward_neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log
         size_log_td_ngbr = (
             (size_log_td - node_size * log_td) + (node_size * 2) * log_td)
 
-        yield rtgem.add_edge_operator, [edge], logL_ngr, size_log_td_ngbr, cnt_drt_df
+        yield rtgem.add_edge_operator, [edge], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
 
 # def backwardSearch(model, data, t_max):
