@@ -29,7 +29,7 @@ class RTGEM:
         return [self.dpd_graph.get_edge_data(pa, node)['timescales'] for pa in self.dpd_graph.predecessors(node)]
 
     def get_node_parents_timeseries(self, node):
-        return [self.dpd_graph.node[pa]['timeserie'] for pa in self.dpd_graph.predecessors(node)]
+        return [self.dpd_graph.nodes[pa]['timeserie'] for pa in self.dpd_graph.predecessors(node)]
 
     def get_parents_count(self, node):
         return [self.dpd_graph.get_edge_data(pa, node)['parent_count'] for pa in self.dpd_graph.predecessors(node)]
@@ -38,25 +38,25 @@ class RTGEM:
         return list(self.dpd_graph.predecessors(node))
 
     def get_lambda(self, node, pcv):
-        return self.dpd_graph.node[node]['lambdas'][pcv]
+        return self.dpd_graph.nodes[node]['lambdas'][pcv]
 
     def get_lambdas(self, node):
-        return self.dpd_graph.node[node]['lambdas']
+        return self.dpd_graph.nodes[node]['lambdas']
 
     def set_node_timeserie(self, node, ts):
-        self.dpd_graph.node[node]['timeserie'] = ts
+        self.dpd_graph.nodes[node]['timeserie'] = ts
 
     def set_lambda(self, node, pcv, lm):
-        self.dpd_graph.node[node]['lambdas'][pcv] = lm
+        self.dpd_graph.nodes[node]['lambdas'][pcv] = lm
 
     def initLambdas(self, node, random=True, a=0, b=10):
         nb_parent = self.get_node_nb_parents_timescales(node)
         if random:
-            self.dpd_graph.node[node]['lambdas'] = dict(zip(list(itertools.product(
+            self.dpd_graph.nodes[node]['lambdas'] = dict(zip(list(itertools.product(
                 *[[0, 1]] * nb_parent)), np.random.uniform(a, b, np.power(2, nb_parent))))
 
         else:
-            self.dpd_graph.node[node]['lambdas'] = dict(zip(list(itertools.product(
+            self.dpd_graph.nodes[node]['lambdas'] = dict(zip(list(itertools.product(
                 *[[0, 1]] * nb_parent)), [self.default_lambda] * np.power(2, nb_parent)))
 
     def copy(self):
