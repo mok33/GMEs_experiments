@@ -199,23 +199,67 @@ class RTGEM:
 
                 self.split_operator(random_edge, random_tms)
 
-    # PARENT COUNT pl à finir
-    # # def set_node_parent_configuration_change_times(self, node, parent, t):
-    # #     node_parent_count_vector = ()
-    # #     t_expr = np.inf
 
-    # # def get_node_parent_configuration
-    # def get_node_parents_configuration(self, node, t):
-    #     node_parent_count_vector = ()
-    #     t_expr = np.inf
+def pair2list(list_timescales):
+  
+  list = [pair[0] for pair in list_timescales]
+  list.append(list_timescales[len(list_timescales)-1][1])
+  
+  return list
 
-    #     for parent in self.get_node_parents(node):
-    #         parent_timeserie = self.dpd_graph.nodes[
-    #             parent]['timeserie']
-    #         for (a, b) in self.dpd_graph.get_edge_data(parent, node)['timescales']:
-    #             count_pa_timescale = (
-    #                 ((parent_timeserie > t - b) & (parent_timeserie <= t - a)).sum() >= 1) * 1
-    #             node_parent_count_vector += (count_pa_timescale,)
-    #             t_expr = min(t_expr, (b - a))
+def distance_between_timescales(ts1, ts2):
+    vid = []
+    vnid = []
 
-    #     return node_parent_count_vector, t_expr
+    for elem in ts1:
+        if elem in ts2: 
+            vid.append(elem)
+        else: 
+            vnid.append(elem)
+
+        for elem in ts2:
+            if elem not in ts1: vnid.append(elem)
+        
+    distance_btn_timescales = len(vnid)/(len(vnid)+len(vid))
+        
+    return distance_btn_timescales
+
+def symmetric_difference(list_of_rtgems):
+    """
+    finds edges that are in one graph and not the others
+    """
+    Esd = []
+    
+    all_edges = [list(list_of_rtgems[i].dpd_graph.edges()) for i in range(len(list_of_rtgems))]
+    
+    # find arcs that are different
+    for i in range(len(list_of_rtgems)):
+      edges_current_graph = all_edges[i] 
+      edges_other_graphs = all_edges[0:i] + all_edges[i:len(list_of_rtgems)]
+      
+      for edge in edges_current_graph:
+        if  ((edge not in edges_other_graphs) and (edge not in Esd)):
+          Esd.append(edge)
+        
+    return Esd
+
+def SHD(GEM1, GEM2):
+    """
+    Distance measure between two RTGEMs
+    """
+    Esd = symmetric_difference([GEM1, GEM2])
+    Einter = []
+    
+      # find distance of timescales for arcs that are in common    
+    for edge in list(GEM1.dpd_graph.edges()):
+      if edge in list(GEM2.dpd_graph.edges()):
+        
+        # Einter contains pairs of lists of timescales of the arcs that are common to both graphs 
+        ts_rtgem1 = pair2list(GEM1.get_node_parents_timescales(edge[1])[GEM1.get_node_parents(edge[1]).index(edge[0])])
+        ts_rtgem2 = pair2list(GEM2.get_node_parents_timescales(edge[1])[GEM2.get_node_parents(edge[1]).index(edge[0])])
+        Einter.append(distance_between_timescales(ts_rtgem1, ts_rtgem2))
+ 
+    distance_sd = len(Esd)
+    distance_inter = sum(Einter)
+
+    return distance_sd + distance_inter # total distance 
