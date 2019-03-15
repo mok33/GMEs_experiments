@@ -72,7 +72,7 @@ class Configuration:
       score = self.prior * product_individuals_likelihoods
       
       self.score = score
-      
+        
       return score
 
 

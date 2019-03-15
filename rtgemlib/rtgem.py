@@ -263,3 +263,7 @@ def SHD(GEM1, GEM2):
     distance_inter = sum(Einter)
 
     return distance_sd + distance_inter # total distance 
+
+
+def empty_nodes(nodes):
+    return dict(zip(nodes, [{'timescales': {}, 'lambdas': {(): 1}}] * len(nodes)))
