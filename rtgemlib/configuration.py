@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 from .rtgem import RTGEM, symmetric_difference
-from. learning import LogLikelihood
+from. learning import LogLikelihood, set_pcv_lambda_t
 
 class Configuration:
 
@@ -75,6 +76,55 @@ class Configuration:
         
       return score
 
+      
+    def compute_crossed_Loglikelihoods(self, datas, t_max, exportFig=True):
+      """
+      Computes a matrix with logLikelihood for each (Graphi, Dataj)
+      """
+
+      for i in range(self.k):
+        set_pcv_lambda_t(model=self.rtgems[i], data=datas[i], t_max=t_max)
+
+      Loglikelihoods = []
+
+      for i in range(self.k):
+        Loglikelihoodsi = []
+
+        for j in range(self.k):
+          Loglikelihoodij = LogLikelihood(model=self.rtgems[i], observed_data=datas[j], t_max=t_max)
+          Loglikelihoodsi.append(Loglikelihoodij)
+
+        Loglikelihoods.append(Loglikelihoodsi)
+
+      if exportFig:
+        graphs = ['Graph'+str(i+1) for i in range(self.k)]
+        datas = ['Data'+str(i+1) for i in range(self.k)]
+
+        crossed_likelihoods = np.array(Loglikelihoodsi)
+
+        fig, ax = plt.subplots()
+        # ax.imshow(crossed_likelihoods) # invalid dimensions for image data: TODO
+
+        # We want to show all ticks...
+        ax.set_xticks(np.arange(len(datas)))
+        ax.set_yticks(np.arange(len(graphs)))
+        # ... and label them with the respective list entries
+        ax.set_xticklabels(datas)
+        ax.set_yticklabels(graphs)
+
+        # Rotate the tick labels and set their alignment.
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+                rotation_mode="anchor")
+
+        ax.set_title("Likelihoods")
+        fig.tight_layout()
+        # plt.show()
+
+        fig.savefig("images/CrossedLikelihoods.png")
+
+      return Loglikelihoods
+
+      
 
 def build_ts_matrix(rtgems, node1, node2):
   """
@@ -172,3 +222,4 @@ def edits(list_of_arcs, node1, node2):
   #TODO: voir pour les cas d'égalité
     
   return edits
+
