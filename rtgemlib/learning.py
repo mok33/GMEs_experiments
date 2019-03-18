@@ -7,6 +7,66 @@ import scipy as sc
 from .parentCount import get_parents_count_vector
 from .sampling import set_nodes_parents_counts
 
+def neighbors_gen(rtgem, data, t_max, cnt_drt_df, LogL, size_log_td, log_td, possible_edges):
+        edges = copy.deepcopy(rtgem.dpd_graph.edges)
+
+        for edge in edges:
+            if edge in possible_edges:
+                if rtgem.get_edge_timescales_horrizon(edge) < t_max:
+                    node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
+                    node_size = np.power(
+                        2, rtgem.get_node_nb_parents_timescales(edge[1]))
+
+                    old_lambdas = copy.deepcopy(
+                        rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
+
+                    rtgem.extend_operator(edge)
+                    logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
+                        rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
+
+                    rtgem.inverse_extend_operator(edge)
+                    rtgem.dpd_graph.nodes[edge[1]]['lambdas'] = old_lambdas
+
+                    size_log_td_ngbr = (
+                        (size_log_td - node_size * log_td) + (node_size * 2) * log_td)
+                    yield rtgem.extend_operator, [edge], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
+
+                for i_tm, timescale in enumerate(rtgem.dpd_graph.edges[edge]['timescales']):
+                    node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
+                    node_size = np.power(
+                        2, rtgem.get_node_nb_parents_timescales(edge[1]))
+
+                    old_lambdas = copy.deepcopy(
+                        rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
+                    rtgem.split_operator(edge, timescale)
+                    logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
+                        rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
+
+                    rtgem.inverse_split_operator(edge, i_tm)
+                    rtgem.dpd_graph.nodes[edge[1]]['lambdas'] = old_lambdas
+
+                    size_log_td_ngbr = (
+                        (size_log_td - node_size * log_td) + (node_size * 2) * log_td)
+
+                    yield rtgem.split_operator, [edge, timescale], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
+
+        for edge in possible_edges:
+            node_LogL = get_node_LogLikelihood(cnt_drt_df, edge[1])
+            node_size = np.power(2, rtgem.get_node_nb_parents_timescales(edge[1]))
+
+            old_lambdas = copy.deepcopy(rtgem.dpd_graph.nodes[edge[1]]['lambdas'])
+
+            rtgem.add_edge_operator(edge)
+            logL_ngr, changed_cnt_drt_df = LocaleLogLikelihood(
+                rtgem, data, t_max, LogL, node_LogL, edge[1], optimize_lambdas=True)
+
+            rtgem.inverse_add_edge_operator(edge)
+            rtgem.dpd_graph.nodes[edge[1]]['lambdas'] = old_lambdas
+
+            size_log_td_ngbr = (
+                (size_log_td - node_size * log_td) + (node_size * 2) * log_td)
+
+            yield rtgem.add_edge_operator, [edge], logL_ngr, size_log_td_ngbr, changed_cnt_drt_df
 
 def duration(params_df, model, t_max, node=None):
     params_df.loc[:, 'duration'] = 0

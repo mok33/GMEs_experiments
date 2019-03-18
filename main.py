@@ -1,14 +1,16 @@
-from rtgemlib.rtgem import * 
-from rtgemlib.sampling import * 
-from rtgemlib.configuration import * 
+import pandas as pd
 import sys
 import csv
 
-    
+from rtgemlib.rtgem import RTGEM, empty_nodes
+from rtgemlib.sampling import sample_from_tgem
+from rtgemlib.configuration import Configuration
+from rtgemlib.learning import LogLikelihood
+
 
 if __name__ == '__main__':
 
-    generateData=False
+    generateData=True
     
     try:
         generateData=sys.argv[1]
@@ -146,8 +148,8 @@ if __name__ == '__main__':
     models.append(G1)
     models.append(G2)
     models.append(G3)
-    models.append(G4)
-    models.append(G5)
+    # models.append(G4)
+    # models.append(G5)
 
     # build rtgem from the defined models
     rtgem_models = [RTGEM(model) for model in models]
@@ -183,7 +185,21 @@ if __name__ == '__main__':
 
     crossed_likelihoods = reference_configuration.compute_crossed_Loglikelihoods(datas, t_max)
 
-    
+    # test upperbound
+    node1 = 'A'
+    node2 = 'B'
 
+    for level in range(len(reference_configuration.rtgems)):  # tests for each level
+
+        # computes likelihood p(Di|Gi)
+        individuals_likelihoods = [LogLikelihood(model=reference_configuration.rtgems[j], observed_data=datas[j], t_max=t_max) 
+        for j in range(reference_configuration.k)]
+        # LogLikelihood > get_count_duration_df > duration 'duration' n'existe pas ?
+
+        # computes bests likelihoods in non defined configurations 
+        bests_likelihoods = reference_configuration.compute_bests(level, datas, t_max, node1, node2)
+
+        U = reference_configuration.upperbound(level=i, individuals_likelihoods=individuals_likelihoods, bests_likelihoods=bests_likelihoods)
+        print(U)
 
 
