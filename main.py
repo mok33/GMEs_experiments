@@ -5,7 +5,7 @@ import csv
 from rtgemlib.rtgem import RTGEM, empty_nodes
 from rtgemlib.sampling import sample_from_tgem
 from rtgemlib.configuration import Configuration
-from rtgemlib.learning import LogLikelihood
+from rtgemlib.learning import compute_logLikelihood, get_count_duration_df
 
 
 if __name__ == '__main__':
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     models = []
     models.append(G1)
     models.append(G2)
-    models.append(G3)
+    # models.append(G3)
     # models.append(G4)
     # models.append(G5)
 
@@ -192,14 +192,18 @@ if __name__ == '__main__':
     for level in range(len(reference_configuration.rtgems)):  # tests for each level
 
         # computes likelihood p(Di|Gi)
-        individuals_likelihoods = [LogLikelihood(model=reference_configuration.rtgems[j], observed_data=datas[j], t_max=t_max) 
-        for j in range(reference_configuration.k)]
+        count_duration_dfs = [get_count_duration_df(model=reference_configuration.rtgems[i], data=datas[i], t_max=t_max)
+        for i in range(reference_configuration.k)]
+
+        individuals_likelihoods = [compute_logLikelihood(count_duration_dfs[i])
+        for i in range(reference_configuration.k)]
         # LogLikelihood > get_count_duration_df > duration 'duration' n'existe pas ?
 
         # computes bests likelihoods in non defined configurations 
-        bests_likelihoods = reference_configuration.compute_bests(level, datas, t_max, node1, node2)
+        bests_likelihoods = reference_configuration.compute_bests(level, datas, t_max,count_duration_dfs, node1, node2)
 
-        U = reference_configuration.upperbound(level=i, individuals_likelihoods=individuals_likelihoods, bests_likelihoods=bests_likelihoods)
+        U = reference_configuration.upperbound(level=i, 
+        individuals_likelihoods=individuals_likelihoods, bests_likelihoods=bests_likelihoods)
         print(U)
 
 

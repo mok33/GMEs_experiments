@@ -122,7 +122,7 @@ class Configuration:
 
       return upperbound
 
-    def compute_bests(self, level, datas, t_max, node1, node2):
+    def compute_bests(self, level, datas, t_max, count_duration_dfs, node1, node2):
 
       log_td = np.log(t_max)
 
@@ -132,8 +132,7 @@ class Configuration:
       bests = []
 
       for i in range(self.k):
-        count_duration_df = get_count_duration_df(model=self.rtgems[i], data=datas[i], t_max=t_max)
-        lambdas_count_duration_df = mle_lambdas(model=self.rtgems[i], count_and_duration=count_duration_df)
+        lambdas_count_duration_df = mle_lambdas(model=self.rtgems[i], count_and_duration=count_duration_dfs[i])
 
         LogL = LogLikelihood(model=self.rtgems[i], observed_data=datas[i], t_max=t_max)
         size_log_td = self.rtgems[i].size() * log_td
