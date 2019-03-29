@@ -6,7 +6,7 @@ import itertools
 from .rtgem import RTGEM, symmetric_difference
 from .learning import LogLikelihood, set_pcv_lambda_t, get_count_duration_df, mle_lambdas, neighbors_gen
 
-class Configuration:
+class Set:
 
     def __init__(self, rtgems, individual_priors=None, level=None, Z=2, delta=0.5):
         self.rtgems = rtgems
@@ -198,6 +198,12 @@ class Configuration:
         fig.savefig("images/CrossedLikelihoods.png")
 
       return Loglikelihoods
+
+    def print_set(self):
+      for i_rtgem in range(len(self.rtgems)):
+        print("RTGEM ", i_rtgem)
+        self.rtgems[i_rtgem].print_rtgem() 
+        print("")
 
       
 

@@ -198,6 +198,17 @@ class RTGEM:
                     list(self.dpd_graph.edges[random_edge]['timescales']))
 
                 self.split_operator(random_edge, random_tms)
+    
+    def print_rtgem(self):
+        nodes = ""
+        for node in self.dpd_graph.nodes:
+            nodes += str(node) + " "
+            
+        print("Nodes:", nodes)
+        
+        print("Edges:")
+        for edge in self.dpd_graph.edges:
+            print(edge[0], "->", edge[1])
 
 
     

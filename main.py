@@ -4,18 +4,15 @@ import csv
 
 from rtgemlib.rtgem import RTGEM, empty_nodes
 from rtgemlib.sampling import sample_from_tgem
-from rtgemlib.configuration import Configuration
+from rtgemlib.configuration import Set
 from rtgemlib.learning import compute_logLikelihood, get_count_duration_df
 
 
-if __name__ == '__main__':
+def main_algorithm(generateData):
 
-    generateData=True
-    
-    try:
-        generateData=sys.argv[1]
+    if(generateData):
         print('Data will be generated')
-    except:
+    else:
         print('No data will be generated')
 
     # defines 5 examples graphs
@@ -167,7 +164,7 @@ if __name__ == '__main__':
         for i in range(k):
                 datas[i].to_csv('data/data' + str(i+1) + '.csv', index=False)
 
-    # if no generation, then get data from csv files
+    if no generation, then get data from csv files
     else:
         datas = []
         for i in range(k):
@@ -177,8 +174,8 @@ if __name__ == '__main__':
     empty_models = [RTGEM(empty_nodes(list(rtgem_models[i].dpd_graph.nodes)), 
     default_end_timescale=1) for i in range(k)] 
 
-    initial_configuration = Configuration(empty_models)
-    reference_configuration = Configuration(rtgem_models)
+    initial_configuration = Set(empty_models)
+    reference_configuration = Set(rtgem_models)
 
     # priors P(Gi)
     pG = [0.5 for i in range(k)]
@@ -189,21 +186,35 @@ if __name__ == '__main__':
     node1 = 'A'
     node2 = 'B'
 
-    for level in range(len(reference_configuration.rtgems)):  # tests for each level
+    # for level in range(len(reference_configuration.rtgems)):  # tests for each level
 
-        # computes likelihood p(Di|Gi)
-        count_duration_dfs = [get_count_duration_df(model=reference_configuration.rtgems[i], data=datas[i], t_max=t_max)
-        for i in range(reference_configuration.k)]
+    #     # computes likelihood p(Di|Gi)
+    #     count_duration_dfs = [get_count_duration_df(model=reference_configuration.rtgems[i], data=datas[i], t_max=t_max)
+    #     for i in range(reference_configuration.k)]
 
-        individuals_likelihoods = [compute_logLikelihood(count_duration_dfs[i])
-        for i in range(reference_configuration.k)]
-        # LogLikelihood > get_count_duration_df > duration 'duration' n'existe pas ?
+    #     individuals_likelihoods = [compute_logLikelihood(count_duration_dfs[i])
+    #     for i in range(reference_configuration.k)]
+    #     # LogLikelihood > get_count_duration_df > duration 'duration' n'existe pas ?
 
-        # computes bests likelihoods in non defined configurations 
-        bests_likelihoods = reference_configuration.compute_bests(level, datas, t_max,count_duration_dfs, node1, node2)
+    #     # computes bests likelihoods in non defined configurations 
+    #     bests_likelihoods = reference_configuration.compute_bests(level, datas, t_max,count_duration_dfs, node1, node2)
 
-        U = reference_configuration.upperbound(level=i, 
-        individuals_likelihoods=individuals_likelihoods, bests_likelihoods=bests_likelihoods)
-        print(U)
+    #     U = reference_configuration.upperbound(level=i, 
+    #     individuals_likelihoods=individuals_likelihoods, bests_likelihoods=bests_likelihoods)
+    #     print(U)
+
+
+
+if __name__ == '__main__':
+
+    try:
+        generateData=sys.argv[1]
+    except:
+        generateData=True
+
+
+    main_algorithm(generateData)
+
+
 
 
